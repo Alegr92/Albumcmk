@@ -14,7 +14,7 @@ export default function Footer() {
 
         {/* Botón de Discord centrado */}
         <a
-          href="https://discord.com/users/Soliduss#6735" // reemplaza con tu enlace real
+          href="https://discord.com/users/Soliduss#6735" 
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-semibold py-2 px-4 rounded-lg shadow-md mt-2"
@@ -33,7 +33,7 @@ export default function Footer() {
 
       {/* Línea inferior */}
       <div className="mt-4 text-center text-xs text-gray-500">
-        © {new Date().getFullYear()} Alejandro Ruiz. Todos los derechos reservados.
+        © {new Date().getFullYear()} Soliduss. Todos los derechos reservados.
       </div>
     </footer>
   );
