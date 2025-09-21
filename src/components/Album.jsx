@@ -65,7 +65,7 @@ export default function Album({ collection, ALL_CARDS, setSelectedCard }) {
                   onClick={() => hasCard && setSelectedCard(card)}
                 >
                   <img
-                    src={hasCard ? card.img : "/cards/Hide.png"}
+                    src={hasCard ? card.img : "/cards/Hide.webp"}
                     alt={hasCard ? card.name : "Carta bloqueada"}
                     className={`w-full h-full object-cover rounded-md transition-all duration-300 ${
                       hasCard ? "" : "opacity-40 blur-sm"

@@ -284,7 +284,7 @@ export default function PackOpener() {
       });
     }
   }
-}, 1200);
+}, 2000);
 };
 
   // ------------------ RENDER ------------------
