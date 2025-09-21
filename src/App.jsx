@@ -78,8 +78,11 @@ const COINS_KEY = "cmk_coins";
 
 const XP_GAIN = { common: 10, rare: 25, epic: 50 };
 const COINS_FROM_DUP = { common: 5, rare: 10, epic: 15 };
+const CARD_REVEAL_DELAY = 1200;
+const XP_COIN_DELAY = 300;
+const FINAL_ANIMATION_DELAY = 1200; // Nuevo: retraso final para la animación
 
-// ------------------ FUNCIONES ------------------
+// ------------------ FUNCIONES AUXILIARES ------------------
 function sampleCard(probabilities) {
   const r = Math.random();
   let threshold = 0;
@@ -109,6 +112,7 @@ export default function PackOpener() {
   const [containerVisible, setContainerVisible] = useState(false);
   const [timeLeft, setTimeLeft] = useState(getMidnightRemaining());
   const [selectedCard, setSelectedCard] = useState(null);
+  const [isOpeningPack, setIsOpeningPack] = useState(false);
 
   const [coins, setCoins] = useState(() => {
     const savedCoins = localStorage.getItem(COINS_KEY);
@@ -145,45 +149,31 @@ export default function PackOpener() {
     }
   }, []);
 
-  // Guardar monedas
-  useEffect(() => {
-    localStorage.setItem(COINS_KEY, coins);
-  }, [coins]);
-
   // Contador hasta medianoche
   useEffect(() => {
     const interval = setInterval(() => setTimeLeft(getMidnightRemaining()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // ------------------ FUNCIONES DE JUEGO ------------------
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
   const gainXp = (amount) => {
     setPlayer((prev) => {
       let { xp, level, xpToNextLevel } = prev;
       xp += amount;
-
       while (xp >= xpToNextLevel) {
         xp -= xpToNextLevel;
         level += 1;
         xpToNextLevel = Math.floor(xpToNextLevel * 1.2);
       }
-
-      const updated = { xp, level, xpToNextLevel };
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          date: new Date().toDateString(),
-          openedToday,
-          collection,
-          player: updated,
-        })
-      );
-
-      return updated;
+      return { xp, level, xpToNextLevel };
     });
   };
 
-  const openPack = (typeOrIndex) => {
+  const openPack = async (typeOrIndex) => {
+    if (isOpeningPack) return;
+    setIsOpeningPack(true);
+
     let probabilities;
     let isDaily = false;
     let dailyIndex = null;
@@ -194,98 +184,70 @@ export default function PackOpener() {
       const index = typeOrIndex;
       dailyIndex = index;
       isDaily = true;
-
-      if (openedToday.includes(index) || openedToday.length >= 4) return;
-      if (disabledPacks.includes(index)) return;
-
+      if (openedToday.includes(index) || openedToday.length >= 4) {
+        setIsOpeningPack(false);
+        return;
+      }
       setDisabledPacks((prev) => [...prev, index]);
       probabilities = index === 3 ? PROBABILITIES_EPIC : PROBABILITIES_NORMAL;
     }
 
     const pack = Array.from({ length: 4 }, () => sampleCard(probabilities));
-
     setRevealed([]);
+    setContainerVisible(true);
+
     let tempCollection = [...collection];
-    let i = 0;
-
- const interval = setInterval(() => {
-  if (i < pack.length) {
-    const card = pack[i];
-
-    // mostrar carta
-    setRevealed((prev) => [...prev, card]);
-
-    // nueva o duplicada
-    if (!tempCollection.some((c) => c.id === card.id)) {
-      tempCollection.push(card); // nueva carta
-    } else {
-      // carta duplicada => recompensa en monedas
-      const reward = COINS_FROM_DUP[card.rarity] || 1;
-      setCoins((prev) => prev + reward);
-      new Audio("/sounds/coin.mp3").play().catch(() => {});
-
-      // popup animado sobre la carta duplicada usando cardId
-      setRewardPopups((prev) => [
-        ...prev,
-        { id: Date.now() + Math.random(), reward, cardId: card.id },
-      ]);
-    }
-
-    // XP por rareza
-    gainXp(XP_GAIN[card.rarity]);
-
-    // sonidos rareza
-    if (card.rarity === "epic") new Audio("/sounds/epic.mp3").play().catch(() => {});
-    if (card.rarity === "rare") new Audio("/sounds/rare.mp3").play().catch(() => {});
-
-    i++;
-  } else {
-    clearInterval(interval);
-
-    // Actualizo la colección en estado
-    setCollection(tempCollection);
-
-    const today = new Date().toDateString();
+    let tempCoins = coins;
 
     if (isDaily) {
-      setOpenedToday((prevOpened) => {
-        const updatedOpened = [...prevOpened, dailyIndex];
-        setContainerVisible(true);
-
-        // Persistir datos
-        setPlayer((currentPlayer) => {
-          localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({
-              date: today,
-              openedToday: updatedOpened,
-              collection: tempCollection,
-              player: currentPlayer,
-            })
-          );
-          return currentPlayer;
-        });
-
-        return updatedOpened;
-      });
-    } else {
-      // Persistir datos para sobres comprados
-      setPlayer((currentPlayer) => {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({
-            date: today,
-            openedToday,
-            collection: tempCollection,
-            player: currentPlayer,
-          })
-        );
-        return currentPlayer;
-      });
+      setOpenedToday((prev) => [...prev, dailyIndex]);
     }
-  }
-}, 2000);
-};
+
+    for (const card of pack) {
+      await wait(CARD_REVEAL_DELAY);
+      setRevealed((prev) => [...prev, card]);
+
+      await wait(XP_COIN_DELAY);
+
+      if (!tempCollection.some((c) => c.id === card.id)) {
+        tempCollection.push(card);
+      } else {
+        const reward = COINS_FROM_DUP[card.rarity] || 1;
+        tempCoins += reward;
+        new Audio("/sounds/coin.mp3").play().catch(() => {});
+        setRewardPopups((prev) => [...prev, { id: Date.now() + Math.random(), reward, cardId: card.id }]);
+      }
+
+      gainXp(XP_GAIN[card.rarity]);
+      
+      if (card.rarity === "epic") new Audio("/sounds/epic.mp3").play().catch(() => {});
+      if (card.rarity === "rare") new Audio("/sounds/rare.mp3").play().catch(() => {});
+    }
+
+    // Esperar a que la animación de la última carta termine
+    await wait(FINAL_ANIMATION_DELAY);
+
+    setCollection(tempCollection);
+    setCoins(tempCoins);
+
+    // Habilitar la interacción nuevamente
+    setIsOpeningPack(false);
+
+    setPlayer((finalPlayerState) => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          date: new Date().toDateString(),
+          openedToday: isDaily ? [...openedToday, dailyIndex] : openedToday,
+          collection: tempCollection,
+          player: finalPlayerState,
+        })
+      );
+      return finalPlayerState;
+    });
+
+    localStorage.setItem(COINS_KEY, tempCoins);
+  };
 
   // ------------------ RENDER ------------------
   return (
@@ -293,10 +255,10 @@ export default function PackOpener() {
       <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-gray-800 to-gray-950 animate-pulse-slow -z-20" />
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.03),transparent_70%)] -z-10" />
 
-      <HeroImage 
-      image="avatars/cmk.webp" 
-      title="Album de cartas CMK" 
-      subtitle="Coleccion cyberpunk" 
+      <HeroImage
+        image="avatars/cmk.webp"
+        title="Album de cartas CMK"
+        subtitle="Coleccion cyberpunk"
       />
 
       <PlayerProfile
@@ -310,8 +272,7 @@ export default function PackOpener() {
         {[0, 1, 2, 3].map((index) => {
           const isEpic = index === 3;
           const isOpened = openedToday.includes(index);
-          const isDisabled = disabledPacks.includes(index);
-
+          const isDisabled = disabledPacks.includes(index) || isOpeningPack;
           return (
             <motion.img
               key={index}
@@ -347,11 +308,11 @@ export default function PackOpener() {
       </div>
 
       {openedToday.length >= 4 && (
-          <p className="text-yellow-300 mb-3">
-            Próximos sobres en: {Math.floor(timeLeft / 3600000)}h{" "}
-            {Math.floor((timeLeft % 3600000) / 60000)}m
-          </p>
-        )}
+        <p className="text-yellow-300 mb-3">
+          Próximos sobres en: {Math.floor(timeLeft / 3600000)}h{" "}
+          {Math.floor((timeLeft % 3600000) / 60000)}m
+        </p>
+      )}
 
       <AnimatePresence>
         {(revealed.length > 0 || containerVisible) && (
@@ -368,7 +329,7 @@ export default function PackOpener() {
                 onClick={() => setSelectedCard(card)}
                 initial={{ opacity: 0, y: 50, rotateY: 90 }}
                 animate={{ opacity: 1, y: 0, rotateY: 0 }}
-                transition={{ duration: 0.5 }}
+                transition={{ duration: 0.5, delay: i * 0.2 }}
               >
                 <img
                   src={card.img}
@@ -436,6 +397,7 @@ export default function PackOpener() {
       <div className="my-6 z-10">
         <Shop
           onBuyPack={(type) => {
+            if (isOpeningPack) return;
             if (type === "normal" && coins >= 50) {
               setCoins((c) => c - 50);
               openPack("normal");
@@ -450,10 +412,9 @@ export default function PackOpener() {
       </div>
 
       <Album collection={collection} ALL_CARDS={ALL_CARDS} setSelectedCard={setSelectedCard} />
-      
-      <Footer/>
 
-    </div> 
+      <Footer />
+    </div>
   );
 }
 
