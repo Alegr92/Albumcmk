@@ -14,32 +14,32 @@ export default function Shop({ onBuyPack, coins }) {
       <div className="flex flex-col sm:flex-row gap-6">
         {/* Sobre Normal */}
         <motion.button
-          onClick={() => onBuyPack("normal")}
-          disabled={coins < 50}
-          whileHover={coins >= 50 ? { scale: 1.05 } : {}}
-          whileTap={coins >= 50 ? { scale: 0.95 } : {}}
+          onClick={() => onBuyPack("normal",75)}
+          disabled={coins < 75}
+          whileHover={coins >= 75 ? { scale: 1.05 } : {}}
+          whileTap={coins >= 75 ? { scale: 0.95 } : {}}
           className={`px-6 py-3 rounded-xl font-bold shadow-lg text-white ${
-            coins >= 50
+            coins >= 75
               ? "bg-blue-600 hover:bg-blue-700"
               : "bg-gray-600 cursor-not-allowed"
           }`}
         >
-          Comprar Sobre Normal (50💰)
+          Comprar Sobre Normal (75💰)
         </motion.button>
 
         {/* Sobre Épico */}
         <motion.button
-          onClick={() => onBuyPack("epic")}
-          disabled={coins < 100}
-          whileHover={coins >= 100 ? { scale: 1.05 } : {}}
-          whileTap={coins >= 100 ? { scale: 0.95 } : {}}
+          onClick={() => onBuyPack("epic",150)}
+          disabled={coins < 150}
+          whileHover={coins >= 150 ? { scale: 1.05 } : {}}
+          whileTap={coins >= 150 ? { scale: 0.95 } : {}}
           className={`px-6 py-3 rounded-xl font-bold shadow-lg text-white ${
-            coins >= 100
+            coins >= 150
               ? "bg-yellow-600 hover:bg-yellow-700"
               : "bg-gray-600 cursor-not-allowed"
           }`}
         >
-          Comprar Sobre Épico (100💰)
+          Comprar Sobre Épico (150💰)
         </motion.button>
       </div>
     </div>

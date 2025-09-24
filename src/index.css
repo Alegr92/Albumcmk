@@ -4,3 +4,47 @@
   caret-color: transparent;
 }
 
+.card-glow {
+  position: relative;
+  border-radius: 12px;
+}
+
+.card-glow::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 20; /* Encima de la img */
+}
+
+/* Rare: borde azul */
+.card-glow.rare::after {
+  box-shadow: 0 0 12px 4px rgba(30, 144, 255, 0.6);
+  animation: pulseBorderRare 2s infinite ease-in-out;
+  will-change: box-shadow, transform; /* optimización GPU */
+}
+
+/* Epic: borde violeta animado */
+.card-glow.epic::after {
+  box-shadow: 0 0 16px 6px rgba(186, 85, 211, 0.8);
+  animation: pulseBorderEpic 2s infinite ease-in-out;
+  will-change: box-shadow, transform; /* optimización GPU */
+}
+
+@keyframes pulseBorderEpic {
+  0%   { box-shadow: 0 0 10px 3px rgba(248, 221, 46, 0.6); }
+  50%  { box-shadow: 0 0 20px 8px rgb(245, 245, 65); }
+  100% { box-shadow: 0 0 10px 3px rgba(248, 221, 46, 0.6); }
+}
+
+@keyframes pulseBorderRare {
+  0%   { box-shadow: 0 0 10px 3px rgba(23, 109, 247, 0.6); }
+  50%  { box-shadow: 0 0 20px 8px rgb(34, 155, 247); }
+  100% { box-shadow: 0 0 10px 3px rgba(23, 109, 247, 0.6); }
+}
+
+

@@ -6,6 +6,7 @@ import PlayerProfile from "./components/PlayerProfile";
 import Shop from "./components/Shop";
 import Footer from "./components/Footer";
 import HeroImage from "./components/HeroImage";
+import "./index.css"
 
 // ------------------ DATA ------------------
 const ALL_CARDS = [
@@ -127,27 +128,31 @@ export default function PackOpener() {
 
   const [rewardPopups, setRewardPopups] = useState([]);
 
-  // Cargar localStorage
-  useEffect(() => {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const today = new Date().toDateString();
+// Cargar localStorage
+useEffect(() => {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const today = new Date().toDateString();
 
-    if (raw) {
-      try {
-        const data = JSON.parse(raw);
-        if (data.date === today) {
-          setOpenedToday(data.openedToday || []);
-          setCollection(data.collection || []);
-          if (data.player) setPlayer(data.player);
-          if ((data.openedToday || []).length > 0) setContainerVisible(true);
-        } else {
-          setOpenedToday([]);
-        }
-      } catch (e) {
-        console.error("Error parsing STORAGE_KEY", e);
+  if (raw) {
+    try {
+      const data = JSON.parse(raw);
+      if (data.date === today) {
+        // Día actual → restaurar todo
+        setOpenedToday(data.openedToday || []);
+        setCollection(data.collection || []);
+        if (data.player) setPlayer(data.player);
+        if ((data.openedToday || []).length > 0) setContainerVisible(true);
+      } else {
+        // Nuevo día → resetear sobres, mantener álbum y nivel
+        setOpenedToday([]);
+        setCollection(data.collection || []);
+        if (data.player) setPlayer(data.player);
       }
+    } catch (e) {
+      console.error("Error parsing STORAGE_KEY", e);
     }
-  }, []);
+  }
+}, []);
 
   // Contador hasta medianoche
   useEffect(() => {
@@ -170,84 +175,104 @@ export default function PackOpener() {
     });
   };
 
-  const openPack = async (typeOrIndex) => {
-    if (isOpeningPack) return;
-    setIsOpeningPack(true);
+const openPack = async (typeOrIndex) => {
+  if (isOpeningPack) return;
+  setIsOpeningPack(true);
 
-    let probabilities;
-    let isDaily = false;
-    let dailyIndex = null;
+  let probabilities;
+  let isDaily = false;
+  let dailyIndex = null;
 
-    if (typeof typeOrIndex === "string") {
-      probabilities = typeOrIndex === "epic" ? PROBABILITIES_EPIC : PROBABILITIES_NORMAL;
-    } else {
-      const index = typeOrIndex;
-      dailyIndex = index;
-      isDaily = true;
-      if (openedToday.includes(index) || openedToday.length >= 4) {
+  let tempCollection = [...collection];
+  let tempCoins = coins;
+
+  if (typeof typeOrIndex === "string") {
+    // Comprados en la tienda
+    if (typeOrIndex === "epic") {
+      if (tempCoins < 150) {
         setIsOpeningPack(false);
-        return;
+        return; // No hay monedas suficientes
       }
-      setDisabledPacks((prev) => [...prev, index]);
-      probabilities = index === 3 ? PROBABILITIES_EPIC : PROBABILITIES_NORMAL;
-    }
-
-    const pack = Array.from({ length: 4 }, () => sampleCard(probabilities));
-    setRevealed([]);
-    setContainerVisible(true);
-
-    let tempCollection = [...collection];
-    let tempCoins = coins;
-
-    if (isDaily) {
-      setOpenedToday((prev) => [...prev, dailyIndex]);
-    }
-
-    for (const card of pack) {
-      await wait(CARD_REVEAL_DELAY);
-      setRevealed((prev) => [...prev, card]);
-
-      await wait(XP_COIN_DELAY);
-
-      if (!tempCollection.some((c) => c.id === card.id)) {
-        tempCollection.push(card);
-      } else {
-        const reward = COINS_FROM_DUP[card.rarity] || 1;
-        tempCoins += reward;
-        new Audio("/sounds/coin.mp3").play().catch(() => {});
-        setRewardPopups((prev) => [...prev, { id: Date.now() + Math.random(), reward, cardId: card.id }]);
+      tempCoins -= 150;
+      probabilities = PROBABILITIES_EPIC;
+    } else {
+      if (tempCoins < 75) {
+        setIsOpeningPack(false);
+        return; // No hay monedas suficientes
       }
+      tempCoins -= 75;
+      probabilities = PROBABILITIES_NORMAL;
+    }
+  } else {
+    // Sobres diarios gratis
+    const index = typeOrIndex;
+    dailyIndex = index;
+    isDaily = true;
+    if (openedToday.includes(index) || openedToday.length >= 4) {
+      setIsOpeningPack(false);
+      return;
+    }
+    setDisabledPacks((prev) => [...prev, index]);
+    probabilities = index === 3 ? PROBABILITIES_EPIC : PROBABILITIES_NORMAL;
+  }
 
-      gainXp(XP_GAIN[card.rarity]);
-      
-      if (card.rarity === "epic") new Audio("/sounds/epic.mp3").play().catch(() => {});
-      if (card.rarity === "rare") new Audio("/sounds/rare.mp3").play().catch(() => {});
+  // Generar pack
+  const pack = Array.from({ length: 4 }, () => sampleCard(probabilities));
+  setRevealed([]);
+  setContainerVisible(true);
+
+  if (isDaily) {
+    setOpenedToday((prev) => [...prev, dailyIndex]);
+  }
+
+  for (const card of pack) {
+    await wait(CARD_REVEAL_DELAY);
+    setRevealed((prev) => [...prev, card]);
+
+    await wait(XP_COIN_DELAY);
+
+    if (!tempCollection.some((c) => c.id === card.id)) {
+      tempCollection.push(card);
+    } else {
+      const reward = COINS_FROM_DUP[card.rarity] || 1;
+      tempCoins += reward;
+      new Audio("/sounds/coin.mp3").play().catch(() => {});
+      setRewardPopups((prev) => [
+        ...prev,
+        { id: Date.now() + Math.random(), reward, cardId: card.id },
+      ]);
     }
 
-    // Esperar a que la animación de la última carta termine
-    await wait(FINAL_ANIMATION_DELAY);
+    gainXp(XP_GAIN[card.rarity]);
 
-    setCollection(tempCollection);
-    setCoins(tempCoins);
+    if (card.rarity === "epic") new Audio("/sounds/epic.mp3").play().catch(() => {});
+    if (card.rarity === "rare") new Audio("/sounds/rare.mp3").play().catch(() => {});
+  }
 
-    // Habilitar la interacción nuevamente
-    setIsOpeningPack(false);
+  // Esperar a que termine animación
+  await wait(FINAL_ANIMATION_DELAY);
 
-    setPlayer((finalPlayerState) => {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          date: new Date().toDateString(),
-          openedToday: isDaily ? [...openedToday, dailyIndex] : openedToday,
-          collection: tempCollection,
-          player: finalPlayerState,
-        })
-      );
-      return finalPlayerState;
-    });
+  // Guardar estado
+  setCollection(tempCollection);
+  setCoins(tempCoins);
+  setIsOpeningPack(false);
 
-    localStorage.setItem(COINS_KEY, tempCoins);
-  };
+  setPlayer((finalPlayerState) => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        date: new Date().toDateString(),
+        openedToday: isDaily ? [...openedToday, dailyIndex] : openedToday,
+        collection: tempCollection,
+        player: finalPlayerState,
+      })
+    );
+    return finalPlayerState;
+  });
+
+  localStorage.setItem(COINS_KEY, tempCoins);
+};
+
 
   // ------------------ RENDER ------------------
   return (
@@ -314,98 +339,73 @@ export default function PackOpener() {
         </p>
       )}
 
-      <AnimatePresence>
-        {(revealed.length > 0 || containerVisible) && (
-          <motion.div
-            className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 xl:grid-cols-4 sm:gap-6 mt-2 bg-gray-900/20 p-4 rounded-xl z-10 relative"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            transition={{ duration: 0.5 }}
-          >
-            {revealed.map((card, i) => (
-              <motion.div
-                key={`${card.id}-${i}`}
-                className="w-full h-48 sm:h-60 md:h-60 xl:h-72 rounded-lg cursor-pointer relative shadow-md hover:scale-105 transition-transform duration-300"
-                onClick={() => setSelectedCard(card)}
-                initial={{ opacity: 0, y: 50, rotateY: 90 }}
-                animate={{ opacity: 1, y: 0, rotateY: 0 }}
-                transition={{ duration: 0.5, delay: i * 0.2 }}
-              >
-                <img
-                  src={card.img}
-                  alt={card.name}
-                  className="w-full h-full object-cover rounded-lg"
-                />
+<AnimatePresence>
+  {(revealed.length > 0 || containerVisible) && (
+    <motion.div
+      className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 xl:grid-cols-4 sm:gap-6 mt-2 bg-gray-900/20 p-4 rounded-xl z-10 relative"
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      transition={{ duration: 0.5 }}
+    >
+      {revealed.map((card, i) => (
+        <motion.div
+          key={`${card.id}-${i}`}
+          className={`w-full h-48 sm:h-60 md:h-60 xl:h-72 rounded-lg cursor-pointer relative shadow-md hover:scale-105 transition-transform duration-300 card-glow ${card.rarity}`}
+          onClick={() => setSelectedCard(card)}
+          initial={{ opacity: 0, y: 50, rotateY: 90 }}
+          animate={{ opacity: 1, y: 0, rotateY: 0 }}
+          transition={{ duration: 0.5, delay: i * 0.2 }}
+        >
+          <img
+            src={card.img}
+            alt={card.name}
+            className="w-full h-full object-cover rounded-lg"
+          />
 
-                <AnimatePresence>
-                  {rewardPopups
-                    .filter((popup) => popup.cardId === card.id)
-                    .map((popup) => (
-                      <motion.div
-                        key={popup.id}
-                        className="absolute inset-0 flex items-center justify-center z-30"
-                        initial={{ scale: 0.5, opacity: 0 }}
-                        animate={{ scale: 1.4, opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                        onAnimationComplete={() =>
-                          setRewardPopups((prev) => prev.filter((p) => p.id !== popup.id))
-                        }
-                      >
-                        <div className="bg-yellow-400 text-black px-2 py-1 rounded-md font-bold shadow-lg">
-                          +{popup.reward} 💰
-                        </div>
-                      </motion.div>
-                    ))}
-                </AnimatePresence>
+          <AnimatePresence>
+            {rewardPopups
+              .filter((popup) => popup.cardId === card.id)
+              .map((popup) => (
+                <motion.div
+                  key={popup.id}
+                  className="absolute inset-0 flex items-center justify-center z-30"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1.4, opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.8, ease: "easeOut" }}
+                  onAnimationComplete={() =>
+                    setRewardPopups((prev) =>
+                      prev.filter((p) => p.id !== popup.id)
+                    )
+                  }
+                >
+                  <div className="bg-yellow-400 text-black px-2 py-1 rounded-md font-bold shadow-lg">
+                    +{popup.reward} 💰
+                  </div>
+                </motion.div>
+              ))}
+          </AnimatePresence>
+        </motion.div>
+      ))}
+    </motion.div>
+  )}
+</AnimatePresence>
 
-                {card.rarity === "epic" && (
-                  <>
-                    <div className="absolute inset-0 rounded-lg pointer-events-none z-20 shadow-[0_0_25px_10px_rgba(255,240,100,0.6)]"></div>
-                    {[...Array(6)].map((_, idx) => (
-                      <motion.div
-                        key={idx}
-                        className="absolute w-2 h-2 bg-yellow-300 rounded-full z-20"
-                        initial={{ opacity: 0, y: 0, x: 0, scale: 0.5 }}
-                        animate={{
-                          opacity: [0, 1, 0],
-                          y: [-10, -30, -50][Math.floor(Math.random() * 3)],
-                          x: [-10, 0, 10][Math.floor(Math.random() * 3)],
-                          scale: [0.5, 1, 0.5],
-                        }}
-                        transition={{
-                          repeat: Infinity,
-                          repeatDelay: Math.random() * 2,
-                          duration: 2 + Math.random(),
-                        }}
-                      />
-                    ))}
-                  </>
-                )}
-
-                {card.rarity === "rare" && (
-                  <div className="absolute inset-0 rounded-lg pointer-events-none z-20 shadow-[0_0_25px_10px_rgba(255,255,255,0.5)]"></div>
-                )}
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <CardModal selectedCard={selectedCard} onClose={() => setSelectedCard(null)} />
 
       <div className="my-6 z-10">
         <Shop
-          onBuyPack={(type) => {
+          onBuyPack={(type, cost) => {
             if (isOpeningPack) return;
-            if (type === "normal" && coins >= 50) {
-              setCoins((c) => c - 50);
-              openPack("normal");
-            }
-            if (type === "epic" && coins >= 100) {
-              setCoins((c) => c - 100);
-              openPack("epic");
-            }
+
+            // 🔹 Restar monedas inmediatamente al comprar
+            const newCoins = coins - cost;
+            setCoins(newCoins);
+            localStorage.setItem(COINS_KEY, newCoins);
+
+            // 🔹 Ahora sí, abrir el sobre
+            openPack(type);
           }}
           coins={coins}
         />
